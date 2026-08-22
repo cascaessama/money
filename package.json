@@ -1,0 +1,40 @@
+{
+  "name": "money",
+  "version": "0.1.0",
+  "description": "Aplicação de controle financeiro pessoal",
+  "main": "./out/main/index.js",
+  "author": "",
+  "license": "MIT",
+  "scripts": {
+    "fix:electron": "node scripts/fix-electron-macos.js",
+    "postinstall": "node scripts/fix-electron-macos.js",
+    "dev": "electron-vite dev",
+    "start": "electron-vite preview",
+    "build": "electron-vite build",
+    "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
+    "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
+    "typecheck": "npm run typecheck:node && npm run typecheck:web",
+    "build:win": "npm run build && electron-builder --win",
+    "build:mac": "npm run build && electron-builder --mac",
+    "build:linux": "npm run build && electron-builder --linux"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "sql.js": "^1.14.2"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@types/sql.js": "^1.4.11",
+    "@vitejs/plugin-react": "^4.3.1",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
+    "electron-vite": "^2.3.0",
+    "typescript": "^5.5.3",
+    "vite": "^5.3.1"
+  },
+  "allowScripts": {
+    "electron@31.7.7": true
+  }
+}

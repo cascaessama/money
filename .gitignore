@@ -1,0 +1,10 @@
+node_modules
+dist
+out
+*.log
+.DS_Store
+
+# Banco de dados local (fica fora do repo em ~/Library/Application Support/money)
+*.db
+*.db-shm
+*.db-wal
