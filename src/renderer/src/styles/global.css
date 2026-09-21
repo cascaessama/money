@@ -14,6 +14,8 @@
   --danger-soft: #fdecec;
   --warning: #f59e0b;
   --warning-soft: #fef3e2;
+  --purple: #7c3aed;
+  --purple-soft: #f3e8ff;
   --radius: 14px;
   --shadow: 0 10px 30px rgba(26, 34, 51, 0.08);
   --shadow-sm: 0 2px 8px rgba(26, 34, 51, 0.06);
@@ -468,6 +470,13 @@ tr.is-new td {
   gap: 14px;
   margin-bottom: 20px;
 }
+/* Linha separada para os cards de resumo (Total, Previsto, etc.). */
+.wallet-summary-summary {
+  flex: 1 1 100%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
 .wallet-card {
   flex: 1 1 180px;
   display: flex;
@@ -498,6 +507,30 @@ tr.is-new td {
 }
 .wallet-card.total .wallet-card-name {
   color: var(--primary);
+}
+
+.wallet-card.previsto {
+  background: var(--warning-soft);
+  border-color: color-mix(in srgb, var(--warning) 30%, var(--border));
+}
+.wallet-card.previsto .wallet-card-name {
+  color: var(--warning);
+}
+
+.wallet-card.total-previsto {
+  background: var(--purple-soft);
+  border-color: color-mix(in srgb, var(--purple) 30%, var(--border));
+}
+.wallet-card.total-previsto .wallet-card-name {
+  color: var(--purple);
+}
+
+.wallet-card.devo {
+  background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--danger) 30%, var(--border));
+}
+.wallet-card.devo .wallet-card-name {
+  color: var(--danger);
 }
 
 /* Caixa de segmentação por status */
@@ -889,12 +922,6 @@ tbody tr.is-editing {
 }
 .report-card-net-neg .report-card-value {
   color: var(--danger);
-}
-.report-card-previsto .report-card-value {
-  color: var(--primary);
-}
-.report-card-devo .report-card-value {
-  color: var(--warning);
 }
 .report-delta {
   margin-top: 10px;

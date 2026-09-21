@@ -6,11 +6,13 @@ import { formatCurrency, formatDateInput, amountDisplay } from '../utils/format'
 import { isValidDateBR, completeDateInput } from '../../../shared/validation'
 import SearchableSelect, { toSelectOptions } from '../components/SearchableSelect'
 import { REPORT_STATUS_NONE } from '../../../shared/types'
+import { PREVISTO_STATUS_NAMES, DEVO_STATUS_NAMES } from '../config'
 import type {
   Category,
+  PeriodReport,
+  Transaction,
   TransactionStatus,
-  Wallet,
-  PeriodReport
+  Wallet
 } from '../../../shared/types'
 
 const api = window.api
@@ -42,6 +44,7 @@ export default function ReportsScreen(): JSX.Element {
   const [categories, setCategories] = useState<Category[]>([])
   const [statuses, setStatuses] = useState<TransactionStatus[]>([])
   const [wallets, setWallets] = useState<Wallet[]>([])
+  const [allTransactions, setAllTransactions] = useState<Transaction[]>([])
   const [report, setReport] = useState<PeriodReport | null>(null)
   const [prevReport, setPrevReport] = useState<PeriodReport | null>(null)
   const [loading, setLoading] = useState(true)
@@ -65,14 +68,17 @@ export default function ReportsScreen(): JSX.Element {
 
   const loadRefs = useCallback(async () => {
     try {
-      const [categoryList, statusList, walletList] = await Promise.all([
-        api.categories.list(),
-        api.transactionStatuses.list(),
-        api.wallets.list()
-      ])
+      const [categoryList, statusList, walletList, transactionList] =
+        await Promise.all([
+          api.categories.list(),
+          api.transactionStatuses.list(),
+          api.wallets.list(),
+          api.transactions.list()
+        ])
       setCategories(categoryList)
       setStatuses(statusList)
       setWallets(walletList)
+      setAllTransactions(transactionList)
     } catch (err) {
       console.error(err)
       showToast('error', 'Erro ao carregar os dados de referência.')
@@ -178,22 +184,32 @@ export default function ReportsScreen(): JSX.Element {
   const totalReceived = report?.total_received ?? 0
   const totalSpentAbs = report ? Math.abs(report.total_spent) : 0
 
-  const sumByStatuses = (names: string[]): number => {
-    let sum = 0
-    for (const t of report?.transactions ?? []) {
-      const st = statusName(t.status_id).toLowerCase()
-      if (names.includes(st)) sum += t.amount
-    }
-    return sum
-  }
-  const previstoTotal = sumByStatuses(['pagar', 'agendado', 'receber'])
-  const devoTotal = sumByStatuses(['devo'])
+  // Soma de TODAS as transações (independente do período) com status de "Previsto".
+  const previstoAllTotal = allTransactions
+    .filter((t) =>
+      PREVISTO_STATUS_NAMES.includes(statusName(t.status_id).toLowerCase())
+    )
+    .reduce((sum, t) => sum + t.amount, 0)
+
+  // Soma de TODAS as transações (independente do período) com status "Devo".
+  const devoAllTotal = allTransactions
+    .filter((t) =>
+      DEVO_STATUS_NAMES.includes(statusName(t.status_id).toLowerCase())
+    )
+    .reduce((sum, t) => sum + t.amount, 0)
 
   // Saldo das carteiras ativas (mesmo valor exibido na tabela Carteiras).
   const walletBalances = wallets
     .filter((w) => w.is_active)
     .map((w) => ({ id: w.id, name: w.name, balance: w.balance }))
     .sort((a, b) => b.balance - a.balance)
+
+  // Soma total dos saldos das carteiras ativas.
+  const totalBalance = walletBalances.reduce((sum, w) => sum + w.balance, 0)
+
+  // Saldo projetado: saldo atual (realizado) somado ao previsto COM sinal.
+  // O previsto positivo (a receber) aumenta; o negativo (a pagar) reduz.
+  const projectedBalance = totalBalance + previstoAllTotal
 
   const formatPct = (v: number): string => {
     const s = (v * 100).toFixed(1).replace('.', ',')
@@ -309,6 +325,40 @@ export default function ReportsScreen(): JSX.Element {
                 </span>
               </div>
             ))}
+            <div className="wallet-summary-summary">
+              <div className="wallet-card total">
+                <span className="wallet-card-name">Total</span>
+                <span
+                  className={`wallet-card-balance ${totalBalance < 0 ? 'negative' : ''}`}
+                >
+                  {formatCurrency(totalBalance)}
+                </span>
+              </div>
+              <div className="wallet-card previsto">
+                <span className="wallet-card-name">Previsto</span>
+                <span
+                  className={`wallet-card-balance ${previstoAllTotal < 0 ? 'negative' : ''}`}
+                >
+                  {formatCurrency(previstoAllTotal)}
+                </span>
+              </div>
+              <div className="wallet-card total-previsto">
+                <span className="wallet-card-name">Projetado</span>
+                <span
+                  className={`wallet-card-balance ${projectedBalance < 0 ? 'negative' : ''}`}
+                >
+                  {formatCurrency(projectedBalance)}
+                </span>
+              </div>
+              <div className="wallet-card devo">
+                <span className="wallet-card-name">Devo</span>
+                <span
+                  className={`wallet-card-balance ${devoAllTotal < 0 ? 'negative' : ''}`}
+                >
+                  {formatCurrency(devoAllTotal)}
+                </span>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -403,26 +453,6 @@ export default function ReportsScreen(): JSX.Element {
                 {formatCurrency(report.net)}
               </div>
               {renderDelta(deltaNet, false)}
-            </div>
-            <div className="report-card report-card-previsto">
-              <div className="report-card-label">🔮 Previsto</div>
-              <div className="report-card-value">
-                {formatCurrency(previstoTotal)}
-              </div>
-            </div>
-            <div
-              className={`report-card ${report.net - previstoTotal >= 0 ? 'report-card-net-pos' : 'report-card-net-neg'}`}
-            >
-              <div className="report-card-label">📊 Saldo − Previsto</div>
-              <div className="report-card-value">
-                {formatCurrency(report.net - previstoTotal)}
-              </div>
-            </div>
-            <div className="report-card report-card-devo">
-              <div className="report-card-label">💳 Devo</div>
-              <div className="report-card-value">
-                {formatCurrency(devoTotal)}
-              </div>
             </div>
             <div className="report-card">
               <div className="report-card-label">🔢 Transações</div>

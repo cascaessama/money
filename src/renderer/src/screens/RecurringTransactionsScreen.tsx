@@ -6,6 +6,7 @@ import { formatDateInput, parseMoney, formatAmountBlur } from '../utils/format'
 import { isValidDateBR, completeDateInput } from '../../../shared/validation'
 import SearchableSelect, { toSelectOptions } from '../components/SearchableSelect'
 import type { TransactionInput, Wallet, Category, TransactionStatus } from '../../../shared/types'
+import { DEVO_STATUS_NAME } from '../config'
 
 const api = window.api
 
@@ -68,7 +69,7 @@ export default function RecurringTransactionsScreen(): JSX.Element {
         setStatuses(statusList)
         // Status padrão: "Devo".
         const devo = statusList.find(
-          (s) => s.name.trim().toLowerCase() === 'devo'
+          (s) => s.name.trim().toLowerCase() === DEVO_STATUS_NAME
         )
         if (devo) setStatusId(devo.id)
       } catch (err) {
@@ -96,7 +97,8 @@ export default function RecurringTransactionsScreen(): JSX.Element {
 
   // Status padrão da tela.
   const devoStatusId =
-    statuses.find((s) => s.name.trim().toLowerCase() === 'devo')?.id ?? null
+    statuses.find((s) => s.name.trim().toLowerCase() === DEVO_STATUS_NAME)?.id ??
+    null
 
   function handleReset(): void {
     setDate('')

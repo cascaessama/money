@@ -11,7 +11,7 @@ import {
   amountDisplay,
   formatAmountBlur
 } from '../utils/format'
-import { dateMatcher, sortByDateDesc } from '../utils/dateFilter'
+import { dateMatcher } from '../utils/dateFilter'
 import { isValidDateBR, completeDateInput } from '../../../shared/validation'
 import { useColumnFilters } from '../hooks/useColumnFilters'
 import { useNewShortcut } from '../hooks/useNewShortcut'
@@ -62,18 +62,24 @@ export default function TransactionsScreen(): JSX.Element {
 
   const activeStatuses = statuses.filter((s) => s.is_active)
 
-  const baseFiltered = applyFilters(rows, (row, field) => {
-    if (field === 'wallet')
-      return wallets.find((w) => w.id === row.wallet_id)?.name ?? ''
-    if (field === 'category')
-      return categories.find((c) => c.id === row.category_id)?.name ?? ''
-    if (field === 'status')
-      return statuses.find((s) => s.id === row.status_id)?.name ?? ''
-    if (field === 'notes') return row.notes ?? ''
-    if (field === 'date') return row.date
-    if (field === 'amount') return amountDisplay(row.amount)
-    return ''
-  })
+  // Converte uma linha no texto usado pelos filtros de coluna.
+  const getFieldText = useCallback(
+    (row: Transaction, field: string): string => {
+      if (field === 'wallet')
+        return wallets.find((w) => w.id === row.wallet_id)?.name ?? ''
+      if (field === 'category')
+        return categories.find((c) => c.id === row.category_id)?.name ?? ''
+      if (field === 'status')
+        return statuses.find((s) => s.id === row.status_id)?.name ?? ''
+      if (field === 'notes') return row.notes ?? ''
+      if (field === 'date') return row.date
+      if (field === 'amount') return amountDisplay(row.amount)
+      return ''
+    },
+    [wallets, categories, statuses]
+  )
+
+  const baseFiltered = applyFilters(rows, getFieldText)
   // Exclui os status marcados na caixa de segmentação.
   const filtered = baseFiltered.filter(
     (t) => t.status_id == null || !hiddenStatuses.has(t.status_id)
@@ -160,7 +166,7 @@ export default function TransactionsScreen(): JSX.Element {
         const updated = await api.transactions.update(id, next)
         if (updated) {
           setRows((prevRows) =>
-            prevRows.map((r) => (r.id === id ? updated : r)).sort(sortByDateDesc)
+            prevRows.map((r) => (r.id === id ? updated : r))
           )
           refreshWallets()
           showToast('success', 'Transação atualizada.')
@@ -205,9 +211,26 @@ export default function TransactionsScreen(): JSX.Element {
         notes: newDraft.notes.trim(),
         status_id: newDraft.statusId || null
       })
-      const sorted = [created, ...rows].sort(sortByDateDesc)
-      const createdIndex = sorted.findIndex((r) => r.id === created.id)
-      setRows(sorted)
+      // Sem reordenar a lista: apenas adiciona o novo registro no topo.
+      const updatedRows = [created, ...rows]
+      // Se o status do novo registro estiver oculto na segmentação,
+      // reexibe-o para que o registro fique visível e possa ser destacado.
+      let effectiveHidden = hiddenStatuses
+      if (
+        created.status_id != null &&
+        hiddenStatuses.has(created.status_id)
+      ) {
+        effectiveHidden = new Set(hiddenStatuses)
+        effectiveHidden.delete(created.status_id)
+        setHiddenStatuses(effectiveHidden)
+      }
+      setRows(updatedRows)
+      // Calcula a página com a mesma filtragem exibida na tela,
+      // para garantir que o registro novo apareça nela.
+      const visibleNew = applyFilters(updatedRows, getFieldText).filter(
+        (t) => t.status_id == null || !effectiveHidden.has(t.status_id)
+      )
+      const createdIndex = visibleNew.findIndex((r) => r.id === created.id)
       if (createdIndex >= 0) {
         setPage(Math.floor(createdIndex / PAGE_SIZE) + 1)
       }
@@ -222,7 +245,16 @@ export default function TransactionsScreen(): JSX.Element {
     } finally {
       setBusyId(null)
     }
-  }, [newDraft, rows, showToast, load, refreshWallets])
+  }, [
+    newDraft,
+    rows,
+    showToast,
+    load,
+    refreshWallets,
+    applyFilters,
+    getFieldText,
+    hiddenStatuses
+  ])
 
   const grid = useExcelGrid({
     fields: FIELDS,

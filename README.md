@@ -131,6 +131,10 @@ npm run build       # gera os arquivos de build em out/
 npm run build:mac   # gera o app nativo (dmg) para macOS
 npm run build:win   # gera o instalador para Windows
 npm run build:linux # gera o AppImage/deb para Linux
+
+# macOS: gera o dmg, instala em /Applications, assina com certificado local
+# (auto-assinado) e remove a quarentena — evita o aviso de "malware" ao abrir.
+npm run build:mac:noquarantine
 ```
 
 ---
