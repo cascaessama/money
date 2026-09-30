@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { CSSProperties } from 'react'
 import { useToast } from '../hooks/useToast'
 import { Toast } from '../components/Toast'
 import { Loader } from '../components/Loader'
@@ -29,7 +28,6 @@ export default function CreditTransactionsScreen(): JSX.Element {
   const [types, setTypes] = useState<WalletType[]>([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
-  const [hiddenStatuses, setHiddenStatuses] = useState<Set<number>>(new Set())
   const [selectedWalletId, setSelectedWalletId] = useState<number | null>(null)
   const [paidDate, setPaidDate] = useState('')
   const { toast, showToast } = useToast()
@@ -74,25 +72,21 @@ export default function CreditTransactionsScreen(): JSX.Element {
   )
   const creditWallets = wallets.filter((w) => creditWalletIds.has(w.id))
 
-  const creditRows = rows.filter((t) => creditWalletIds.has(t.wallet_id))
-
-  const activeStatuses = statuses.filter((s) => s.is_active)
+  const creditRows = rows.filter(
+    (t) => creditWalletIds.has(t.wallet_id) && t.status_id == null
+  )
 
   const baseFiltered = applyFilters(creditRows, (row, field) => {
     if (field === 'wallet')
       return wallets.find((w) => w.id === row.wallet_id)?.name ?? ''
     if (field === 'category')
       return categories.find((c) => c.id === row.category_id)?.name ?? ''
-    if (field === 'status')
-      return statuses.find((s) => s.id === row.status_id)?.name ?? ''
     if (field === 'notes') return row.notes ?? ''
     if (field === 'date') return row.date
     if (field === 'amount') return amountDisplay(row.amount)
     return ''
   })
-  const filtered = baseFiltered.filter(
-    (t) => t.status_id == null || !hiddenStatuses.has(t.status_id)
-  )
+  const filtered = baseFiltered
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
@@ -100,16 +94,7 @@ export default function CreditTransactionsScreen(): JSX.Element {
 
   useEffect(() => {
     setPage(1)
-  }, [filters, hiddenStatuses])
-
-  function toggleStatusFilter(statusId: number): void {
-    setHiddenStatuses((prev) => {
-      const next = new Set(prev)
-      if (next.has(statusId)) next.delete(statusId)
-      else next.add(statusId)
-      return next
-    })
-  }
+  }, [filters])
 
   async function handleMarkAsPaid(): Promise<void> {
     if (!selectedWalletId) {
@@ -146,16 +131,13 @@ export default function CreditTransactionsScreen(): JSX.Element {
     wallets.find((w) => w.id === id)?.name ?? ''
   const categoryName = (id: number | null): string =>
     categories.find((c) => c.id === id)?.name ?? ''
-  const statusName = (id: number | null): string =>
-    statuses.find((s) => s.id === id)?.name ?? ''
-
   return (
     <div className="screen">
       <div className="page-head">
         <div>
           <h1 className="page-title">Transações de Crédito</h1>
           <div className="page-subtitle">
-            Apenas visualização (somente leitura). Filtre por coluna ou status.
+            Apenas visualização (somente leitura). Filtre por coluna.
           </div>
         </div>
       </div>
@@ -192,28 +174,6 @@ export default function CreditTransactionsScreen(): JSX.Element {
         </button>
       </div>
 
-      <div className="status-filter">
-        {activeStatuses.map((s) => (
-          <button
-            key={s.id}
-            className={`status-chip ${hiddenStatuses.has(s.id) ? 'hidden' : ''}`}
-            onClick={() => toggleStatusFilter(s.id)}
-            style={
-              s.color
-                ? ({ '--chip-color': s.color } as CSSProperties)
-                : undefined
-            }
-            title={
-              hiddenStatuses.has(s.id)
-                ? 'Clicar para exibir'
-                : 'Clicar para ocultar'
-            }
-          >
-            {s.name}
-          </button>
-        ))}
-      </div>
-
       <section className="card">
         <div className="card-head">
           <h2>
@@ -240,7 +200,6 @@ export default function CreditTransactionsScreen(): JSX.Element {
                 <col style={{ width: '200px' }} />
                 <col style={{ width: '200px' }} />
                 <col style={{ width: '260px' }} />
-                <col style={{ width: '160px' }} />
               </colgroup>
               <thead>
                 <tr>
@@ -289,51 +248,26 @@ export default function CreditTransactionsScreen(): JSX.Element {
                       />
                     </div>
                   </th>
-                  <th>
-                    <div className="th-filter">
-                      <span>Status</span>
-                      <ColumnFilter
-                        value={filters.status ?? ''}
-                        onChange={(v) => setFilter('status', v)}
-                      />
-                    </div>
-                  </th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="table-empty">
+                    <td colSpan={5} className="table-empty">
                       🔍 Nenhum resultado — ajuste ou limpe a busca.
                     </td>
                   </tr>
                 )}
 
-                {pageRows.map((row) => {
-                  const statusColor = statusName(row.status_id)
-                    ? statuses.find((s) => s.id === row.status_id)?.color ?? null
-                    : null
-                  return (
-                    <tr
-                      key={row.id}
-                      className={statusColor ? 'has-status' : ''}
-                      style={
-                        statusColor
-                          ? ({
-                              '--status-color': statusColor
-                            } as CSSProperties)
-                          : undefined
-                      }
-                    >
-                      <td>{row.date}</td>
-                      <td className="cell-amount">{amountDisplay(row.amount)}</td>
-                      <td>{walletName(row.wallet_id)}</td>
-                      <td>{categoryName(row.category_id)}</td>
-                      <td>{row.notes}</td>
-                      <td>{statusName(row.status_id)}</td>
-                    </tr>
-                  )
-                })}
+                {pageRows.map((row) => (
+                  <tr key={row.id}>
+                    <td>{row.date}</td>
+                    <td className="cell-amount">{amountDisplay(row.amount)}</td>
+                    <td>{walletName(row.wallet_id)}</td>
+                    <td>{categoryName(row.category_id)}</td>
+                    <td>{row.notes}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
             {totalPages > 1 && (
