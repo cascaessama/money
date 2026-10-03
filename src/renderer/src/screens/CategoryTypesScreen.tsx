@@ -9,22 +9,19 @@ import { useNewShortcut } from '../hooks/useNewShortcut'
 import { useRowHighlight } from '../hooks/useRowHighlight'
 import ColumnFilter from '../components/ColumnFilter'
 import { isAppError, AppError } from '../../../shared/errors'
-import { APP_CONFIG } from '../../../shared/config'
-import type { TransactionStatus } from '../../../shared/types'
+import type { CategoryType } from '../../../shared/types'
 
-const api = window.api.transactionStatuses
+const api = window.api.categoriesTypes
 
-const FIELDS = ['name', 'color', 'status']
-const NEW_FIELDS = ['name', 'color']
-const DEFAULT_COLOR = APP_CONFIG.defaultStatusColor
+const FIELDS = ['name', 'status']
+const NEW_FIELDS = ['name']
 
-export default function TransactionStatusesScreen(): JSX.Element {
-  const [rows, setRows] = useState<TransactionStatus[]>([])
+export default function CategoryTypesScreen(): JSX.Element {
+  const [rows, setRows] = useState<CategoryType[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
   const [newNameFocused, setNewNameFocused] = useState(false)
-  const [newColor, setNewColor] = useState(DEFAULT_COLOR)
   const [busyId, setBusyId] = useState<number | 'new' | null>(null)
   const { toast, showToast } = useToast()
   const { filters, setFilter, applyFilters, clearFilters } = useColumnFilters()
@@ -56,8 +53,7 @@ export default function TransactionStatusesScreen(): JSX.Element {
       try {
         const updated = await api.update(id, {
           name,
-          is_active: prev.is_active,
-          color: prev.color
+          is_active: prev.is_active
         })
         if (updated) {
           setRows((prevRows) =>
@@ -68,7 +64,7 @@ export default function TransactionStatusesScreen(): JSX.Element {
       } catch (err) {
         console.error(err)
         if (String((err as any)?.message).includes('UNIQUE')) {
-          showToast('error', 'Já existe um status com esse nome.')
+          showToast('error', 'Já existe um tipo com esse nome.')
         } else {
           showToast('error', 'Erro ao salvar o registro.')
         }
@@ -89,23 +85,23 @@ export default function TransactionStatusesScreen(): JSX.Element {
     setCreating(false)
     setBusyId('new')
     try {
-      const created = await api.create({ name, is_active: true, color: newColor })
+      const created = await api.create({ name, is_active: true })
       setRows((prev) => [...prev, created].sort(sortByName))
       setHighlightId(created.id)
-      showToast('success', 'Status criado.')
+      showToast('success', 'Tipo criado.')
       return created.id
     } catch (err) {
       console.error(err)
       if (String((err as any)?.message).includes('UNIQUE')) {
-        showToast('error', 'Já existe um status com esse nome.')
+        showToast('error', 'Já existe um tipo com esse nome.')
       } else {
-        showToast('error', 'Erro ao criar o status.')
+        showToast('error', 'Erro ao criar o tipo.')
       }
       await load()
     } finally {
       setBusyId(null)
     }
-  }, [newName, newColor, showToast, load])
+  }, [newName, showToast, load])
 
   const grid = useExcelGrid({
     fields: FIELDS,
@@ -120,7 +116,6 @@ export default function TransactionStatusesScreen(): JSX.Element {
   function startNew(): void {
     clearFilters()
     setNewName('')
-    setNewColor(DEFAULT_COLOR)
     setCreating(true)
     grid.focusNewName()
   }
@@ -129,14 +124,13 @@ export default function TransactionStatusesScreen(): JSX.Element {
     if (!creating) startNew()
   })
 
-  async function toggleActive(row: TransactionStatus): Promise<void> {
+  async function toggleActive(row: CategoryType): Promise<void> {
     if (busyId !== null) return
     setBusyId(row.id)
     try {
       const updated = await api.update(row.id, {
         name: row.name,
-        is_active: !row.is_active,
-        color: row.color
+        is_active: !row.is_active
       })
       if (updated) {
         setRows((prev) => prev.map((r) => (r.id === row.id ? updated : r)))
@@ -149,36 +143,16 @@ export default function TransactionStatusesScreen(): JSX.Element {
     }
   }
 
-  async function changeColor(row: TransactionStatus, color: string): Promise<void> {
-    if (busyId !== null) return
-    setBusyId(row.id)
-    try {
-      const updated = await api.update(row.id, {
-        name: row.name,
-        is_active: row.is_active,
-        color
-      })
-      if (updated) {
-        setRows((prev) => prev.map((r) => (r.id === row.id ? updated : r)))
-      }
-    } catch (err) {
-      console.error(err)
-      showToast('error', 'Erro ao atualizar a cor.')
-    } finally {
-      setBusyId(null)
-    }
-  }
-
-  async function remove(row: TransactionStatus): Promise<void> {
-    if (!window.confirm(`Excluir o status "${row.name}"?`)) return
+  async function remove(row: CategoryType): Promise<void> {
+    if (!window.confirm(`Excluir o tipo "${row.name}"?`)) return
     try {
       await api.remove(row.id)
-      showToast('success', 'Status excluído.')
+      showToast('success', 'Tipo excluído.')
       await load()
     } catch (err) {
       console.error(err)
-      if (isAppError(err, AppError.STATUS_IN_USE)) {
-        showToast('error', 'Não é possível excluir: este status está em uso em transações.')
+      if (isAppError(err, AppError.CATEGORY_TYPE_IN_USE)) {
+        showToast('error', 'Não é possível excluir: este tipo está associado a uma categoria.')
       } else {
         showToast('error', 'Erro ao excluir o registro.')
       }
@@ -189,14 +163,14 @@ export default function TransactionStatusesScreen(): JSX.Element {
     <div className="screen">
       <div className="page-head">
         <div>
-          <h1 className="page-title">Status de Transação</h1>
+          <h1 className="page-title">Tipos de Categoria</h1>
           <div className="page-subtitle">
             Clique no nome para editar. Use Tab para ir ao próximo campo.
           </div>
         </div>
         {!creating && (
           <button className="btn btn-primary" onClick={startNew}>
-            <span>+</span> Novo status
+            <span>+</span> Novo tipo
           </button>
         )}
       </div>
@@ -204,7 +178,7 @@ export default function TransactionStatusesScreen(): JSX.Element {
       <section className="card">
         <div className="card-head">
           <h2>
-            Status <span className="count-badge">{rows.length}</span>
+            Tipos <span className="count-badge">{rows.length}</span>
           </h2>
         </div>
 
@@ -212,9 +186,9 @@ export default function TransactionStatusesScreen(): JSX.Element {
           <Loader />
         ) : rows.length === 0 && !creating ? (
           <div className="empty">
-            <div className="empty-icon">📌</div>
-            <h3>Nenhum status cadastrado</h3>
-            <p>Clique em “Novo status” para começar.</p>
+            <div className="empty-icon">🏷️</div>
+            <h3>Nenhum tipo cadastrado</h3>
+            <p>Clique em “Novo tipo” para começar.</p>
           </div>
         ) : (
           <div className="table-wrap">
@@ -230,7 +204,6 @@ export default function TransactionStatusesScreen(): JSX.Element {
                       />
                     </div>
                   </th>
-                  <th>Cor</th>
                   <th>Status</th>
                   <th style={{ textAlign: 'right' }}>Ações</th>
                 </tr>
@@ -242,7 +215,7 @@ export default function TransactionStatusesScreen(): JSX.Element {
                       <input
                         ref={grid.registerCell('new:name')}
                         className={`cell-input ${newNameFocused ? 'is-editing' : ''}`}
-                        placeholder="Ex.: Pago"
+                        placeholder="Ex.: Necessário"
                         value={newName}
                         onChange={(e) => setNewName(e.target.value)}
                         onFocus={() => setNewNameFocused(true)}
@@ -251,17 +224,6 @@ export default function TransactionStatusesScreen(): JSX.Element {
                           grid.handleBlur('new:name')
                         }}
                         onKeyDown={grid.gridKeyDown('new:name')}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        ref={grid.registerCell('new:color')}
-                        type="color"
-                        className="color-input"
-                        value={newColor}
-                        onChange={(e) => setNewColor(e.target.value)}
-                        onBlur={() => grid.handleBlur('new:color')}
-                        onKeyDown={grid.gridKeyDown('new:color')}
                       />
                     </td>
                     <td>
@@ -290,7 +252,7 @@ export default function TransactionStatusesScreen(): JSX.Element {
 
                 {visibleRows.length === 0 && !creating && (
                   <tr>
-                    <td colSpan={4} className="table-empty">
+                    <td colSpan={3} className="table-empty">
                       🔍 Nenhum resultado — ajuste ou limpe a busca.
                     </td>
                   </tr>
@@ -309,18 +271,7 @@ export default function TransactionStatusesScreen(): JSX.Element {
                       .filter(Boolean)
                       .join(' ')}
                   >
-                    <td>{grid.textCell(row.id, 'name', row.name, 'Nome do status')}</td>
-                    <td>
-                      <input
-                        ref={grid.registerCell(`${row.id}:color`)}
-                        type="color"
-                        className="color-input"
-                        value={row.color ?? APP_CONFIG.defaultStatusColorFallback}
-                        onChange={(e) => changeColor(row, e.target.value)}
-                        onKeyDown={grid.gridKeyDown(`${row.id}:color`)}
-                        title="Escolher cor"
-                      />
-                    </td>
+                    <td>{grid.textCell(row.id, 'name', row.name, 'Nome do tipo')}</td>
                     <td>
                       <button
                         ref={grid.registerCell(`${row.id}:status`)}

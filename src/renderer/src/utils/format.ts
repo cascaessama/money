@@ -1,7 +1,12 @@
+import { APP_CONFIG } from '../../../shared/config'
+
 /** Formatação de valores. */
 
 export function formatCurrency(value: number): string {
-  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+  return value.toLocaleString(APP_CONFIG.locale, {
+    style: 'currency',
+    currency: APP_CONFIG.currency
+  })
 }
 
 /** Converte texto digitado (formato brasileiro) em número. */
@@ -27,7 +32,7 @@ export function formatDateInput(value: string): string {
 
 /** Exibe um valor com 2 casas decimais no formato brasileiro. */
 export function amountDisplay(amount: number): string {
-  return amount.toLocaleString('pt-BR', {
+  return amount.toLocaleString(APP_CONFIG.locale, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   })
@@ -38,7 +43,7 @@ export function formatAmountBlur(value: string): string {
   const t = value.trim()
   if (!t) return value
   const n = parseMoney(t)
-  return n.toLocaleString('pt-BR', {
+  return n.toLocaleString(APP_CONFIG.locale, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   })

@@ -8,30 +8,43 @@ import { useColumnFilters } from '../hooks/useColumnFilters'
 import { useNewShortcut } from '../hooks/useNewShortcut'
 import { useRowHighlight } from '../hooks/useRowHighlight'
 import ColumnFilter from '../components/ColumnFilter'
-import type { Category } from '../../../shared/types'
+import SearchableSelect, { toSelectOptions } from '../components/SearchableSelect'
+import { isAppError, AppError } from '../../../shared/errors'
+import type { Category, CategoryType } from '../../../shared/types'
 
 const api = window.api.categories
+const apiTypes = window.api.categoriesTypes
 
-const FIELDS = ['name', 'status']
-const NEW_FIELDS = ['name']
+const FIELDS = ['name', 'type', 'status']
+const NEW_FIELDS = ['name', 'type']
 
 export default function CategoriesScreen(): JSX.Element {
   const [rows, setRows] = useState<Category[]>([])
+  const [types, setTypes] = useState<CategoryType[]>([])
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
-  const [newName, setNewName] = useState('')
+  const [newDraft, setNewDraft] = useState({ name: '', typeId: 0 })
   const [newNameFocused, setNewNameFocused] = useState(false)
   const [busyId, setBusyId] = useState<number | 'new' | null>(null)
   const { toast, showToast } = useToast()
   const { filters, setFilter, applyFilters, clearFilters } = useColumnFilters()
   const [highlightId, setHighlightId] = useState<number | null>(null)
   useRowHighlight(highlightId, setHighlightId)
-  const visibleRows = applyFilters(rows, (row) => row.name)
+  const visibleRows = applyFilters(rows, (row, field) =>
+    field === 'type'
+      ? types.find((t) => t.id === row.type_id)?.name ?? ''
+      : String(row.name ?? '')
+  )
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      setRows(await api.list())
+      const [categories, categoryTypes] = await Promise.all([
+        api.list(),
+        apiTypes.list()
+      ])
+      setRows(categories)
+      setTypes(categoryTypes)
     } catch (err) {
       console.error(err)
       showToast('error', 'Erro ao carregar os dados.')
@@ -52,6 +65,7 @@ export default function CategoriesScreen(): JSX.Element {
       try {
         const updated = await api.update(id, {
           name,
+          type_id: prev.type_id,
           is_active: prev.is_active
         })
         if (updated) {
@@ -76,15 +90,19 @@ export default function CategoriesScreen(): JSX.Element {
   )
 
   const onCommitNew = useCallback(async () => {
-    const name = newName.trim()
-    if (!name) {
+    const name = newDraft.name.trim()
+    if (!name || !newDraft.typeId) {
       setCreating(false)
       return
     }
     setCreating(false)
     setBusyId('new')
     try {
-      const created = await api.create({ name, is_active: true })
+      const created = await api.create({
+        name,
+        type_id: newDraft.typeId,
+        is_active: true
+      })
       setRows((prev) => [...prev, created].sort(sortByName))
       setHighlightId(created.id)
       showToast('success', 'Categoria criada.')
@@ -100,7 +118,7 @@ export default function CategoriesScreen(): JSX.Element {
     } finally {
       setBusyId(null)
     }
-  }, [newName, showToast, load])
+  }, [newDraft, showToast, load])
 
   const grid = useExcelGrid({
     fields: FIELDS,
@@ -114,7 +132,8 @@ export default function CategoriesScreen(): JSX.Element {
 
   function startNew(): void {
     clearFilters()
-    setNewName('')
+    const firstType = types.find((t) => t.is_active)?.id ?? types[0]?.id ?? 0
+    setNewDraft({ name: '', typeId: firstType })
     setCreating(true)
     grid.focusNewName()
   }
@@ -129,6 +148,7 @@ export default function CategoriesScreen(): JSX.Element {
     try {
       const updated = await api.update(row.id, {
         name: row.name,
+        type_id: row.type_id,
         is_active: !row.is_active
       })
       if (updated) {
@@ -142,6 +162,26 @@ export default function CategoriesScreen(): JSX.Element {
     }
   }
 
+  async function changeType(row: Category, typeId: number): Promise<void> {
+    if (busyId !== null) return
+    setBusyId(row.id)
+    try {
+      const updated = await api.update(row.id, {
+        name: row.name,
+        type_id: typeId,
+        is_active: row.is_active
+      })
+      if (updated) {
+        setRows((prev) => prev.map((r) => (r.id === row.id ? updated : r)))
+      }
+    } catch (err) {
+      console.error(err)
+      showToast('error', 'Erro ao atualizar o tipo.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   async function remove(row: Category): Promise<void> {
     if (!window.confirm(`Excluir a categoria "${row.name}"?`)) return
     try {
@@ -150,7 +190,11 @@ export default function CategoriesScreen(): JSX.Element {
       await load()
     } catch (err) {
       console.error(err)
-      showToast('error', 'Erro ao excluir a categoria.')
+      if (isAppError(err, AppError.CATEGORY_IN_USE)) {
+        showToast('error', 'Não é possível excluir: esta categoria está em uso em transações.')
+      } else {
+        showToast('error', 'Erro ao excluir a categoria.')
+      }
     }
   }
 
@@ -199,6 +243,15 @@ export default function CategoriesScreen(): JSX.Element {
                       />
                     </div>
                   </th>
+                  <th>
+                    <div className="th-filter">
+                      <span>Tipo</span>
+                      <ColumnFilter
+                        value={filters.type ?? ''}
+                        onChange={(v) => setFilter('type', v)}
+                      />
+                    </div>
+                  </th>
                   <th>Status</th>
                   <th style={{ textAlign: 'right' }}>Ações</th>
                 </tr>
@@ -211,14 +264,29 @@ export default function CategoriesScreen(): JSX.Element {
                         ref={grid.registerCell('new:name')}
                         className={`cell-input ${newNameFocused ? 'is-editing' : ''}`}
                         placeholder="Ex.: Alimentação"
-                        value={newName}
-                        onChange={(e) => setNewName(e.target.value)}
+                        value={newDraft.name}
+                        onChange={(e) =>
+                          setNewDraft((d) => ({ ...d, name: e.target.value }))
+                        }
                         onFocus={() => setNewNameFocused(true)}
                         onBlur={() => {
                           setNewNameFocused(false)
                           grid.handleBlur('new:name')
                         }}
                         onKeyDown={grid.gridKeyDown('new:name')}
+                      />
+                    </td>
+                    <td>
+                      <SearchableSelect
+                        options={toSelectOptions(types, null)}
+                        value={newDraft.typeId || null}
+                        onChange={(id) =>
+                          setNewDraft((d) => ({ ...d, typeId: id ?? 0 }))
+                        }
+                        placeholder="Selecione…"
+                        registerCell={grid.registerCell('new:type')}
+                        onKeyDown={grid.gridKeyDown('new:type')}
+                        onBlur={() => grid.handleBlur('new:type')}
                       />
                     </td>
                     <td>
@@ -247,7 +315,7 @@ export default function CategoriesScreen(): JSX.Element {
 
                 {visibleRows.length === 0 && !creating && (
                   <tr>
-                    <td colSpan={3} className="table-empty">
+                    <td colSpan={4} className="table-empty">
                       🔍 Nenhum resultado — ajuste ou limpe a busca.
                     </td>
                   </tr>
@@ -267,6 +335,15 @@ export default function CategoriesScreen(): JSX.Element {
                       .join(' ')}
                   >
                     <td>{grid.textCell(row.id, 'name', row.name, 'Nome da categoria')}</td>
+                    <td>
+                      <SearchableSelect
+                        options={toSelectOptions(types, row.type_id)}
+                        value={row.type_id}
+                        onChange={(id) => changeType(row, id ?? 0)}
+                        registerCell={grid.registerCell(`${row.id}:type`)}
+                        onKeyDown={grid.gridKeyDown(`${row.id}:type`)}
+                      />
+                    </td>
                     <td>
                       <button
                         ref={grid.registerCell(`${row.id}:status`)}

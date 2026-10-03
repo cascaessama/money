@@ -3,13 +3,16 @@ import { useToast } from '../hooks/useToast'
 import { Toast } from '../components/Toast'
 import { Loader } from '../components/Loader'
 import { formatCurrency, formatDateInput, amountDisplay } from '../utils/format'
+import { formatPercent, percentagesTo100 } from '../utils/percent'
 import { isValidDateBR, completeDateInput } from '../../../shared/validation'
 import SearchableSelect, { toSelectOptions } from '../components/SearchableSelect'
 import { REPORT_STATUS_NONE } from '../../../shared/types'
-import { PREVISTO_STATUS_NAMES, DEVO_STATUS_NAMES } from '../config'
+import { APP_CONFIG } from '../../../shared/config'
 import type {
   Category,
+  CategoryType,
   PeriodReport,
+  PeriodReportCategoryType,
   Transaction,
   TransactionStatus,
   Wallet
@@ -19,13 +22,24 @@ const api = window.api
 
 const SEM_STATUS_LABEL = '—'
 
+const PREVISTO_STATUS_NAMES = APP_CONFIG.previstoStatusNames
+const DEVO_STATUS_NAMES = [APP_CONFIG.devoStatusName]
+
+/** Linha das caixas "por tipo de categoria" (recebido/gasto). `pct` é 0..100. */
+interface TypeTableRow {
+  type_id: number
+  name: string
+  amount: number
+  pct: number
+}
+
 function pad2(n: number): string {
   return String(n).padStart(2, '0')
 }
 
 function parseDateBR(s: string): Date {
   const [d, m, y] = s.split('/').map(Number)
-  return new Date(2000 + y, m - 1, d)
+  return new Date(APP_CONFIG.centuryBase + y, m - 1, d)
 }
 
 function fmtDateBR(d: Date): string {
@@ -45,6 +59,7 @@ export default function ReportsScreen(): JSX.Element {
   const [statuses, setStatuses] = useState<TransactionStatus[]>([])
   const [wallets, setWallets] = useState<Wallet[]>([])
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([])
+  const [categoryTypes, setCategoryTypes] = useState<CategoryType[]>([])
   const [report, setReport] = useState<PeriodReport | null>(null)
   const [prevReport, setPrevReport] = useState<PeriodReport | null>(null)
   const [loading, setLoading] = useState(true)
@@ -68,17 +83,19 @@ export default function ReportsScreen(): JSX.Element {
 
   const loadRefs = useCallback(async () => {
     try {
-      const [categoryList, statusList, walletList, transactionList] =
+      const [categoryList, statusList, walletList, transactionList, categoryTypeList] =
         await Promise.all([
           api.categories.list(),
           api.transactionStatuses.list(),
           api.wallets.list(),
-          api.transactions.list()
+          api.transactions.list(),
+          api.categoriesTypes.list()
         ])
       setCategories(categoryList)
       setStatuses(statusList)
       setWallets(walletList)
       setAllTransactions(transactionList)
+      setCategoryTypes(categoryTypeList)
     } catch (err) {
       console.error(err)
       showToast('error', 'Erro ao carregar os dados de referência.')
@@ -160,6 +177,8 @@ export default function ReportsScreen(): JSX.Element {
 
   const categoryName = (id: number): string =>
     categories.find((c) => c.id === id)?.name ?? '—'
+  const categoryTypeName = (id: number): string =>
+    categoryTypes.find((t) => t.id === id)?.name ?? '—'
   const statusName = (id: number | null): string =>
     statuses.find((s) => s.id === id)?.name ?? '—'
   const walletName = (id: number): string =>
@@ -211,22 +230,50 @@ export default function ReportsScreen(): JSX.Element {
   // O previsto positivo (a receber) aumenta; o negativo (a pagar) reduz.
   const projectedBalance = totalBalance + previstoAllTotal
 
-  const formatPct = (v: number): string => {
-    const s = (v * 100).toFixed(1).replace('.', ',')
-    return s.endsWith(',0') ? `${s.slice(0, -2)}%` : `${s}%`
-  }
+  // Percentuais por categoria distribuídos para fechar em 100% (maior resto),
+  // um conjunto para recebido e outro para gasto.
+  const categoryReport = report?.by_category ?? []
+  const receivedPcts = percentagesTo100(categoryReport.map((c) => c.received))
+  const spentPcts = percentagesTo100(categoryReport.map((c) => Math.abs(c.spent)))
 
-  const categoryRows = (report?.by_category ?? []).map((c) => ({
+  const categoryRows = categoryReport.map((c, i) => ({
     ...c,
     name: categoryName(c.category_id),
-    pctGasto: totalSpentAbs > 0 ? Math.abs(c.spent) / totalSpentAbs : 0,
-    pctRecebido: totalReceived > 0 ? c.received / totalReceived : 0
+    pctRecebido: receivedPcts[i],
+    pctGasto: spentPcts[i]
   }))
 
   const statusRows = (report?.by_status ?? []).map((s) => ({
     ...s,
     name: statusName(s.status_id)
   }))
+
+  // Totais por tipo de categoria. O percentual é distribuído (método do maior
+  // resto) para que a soma das linhas feche exatamente em 100%.
+  const buildTypeRows = (
+    entries: PeriodReportCategoryType[],
+    valueOf: (t: PeriodReportCategoryType) => number
+  ): TypeTableRow[] => {
+    const visible = entries.filter((t) => valueOf(t) !== 0)
+    const pcts = percentagesTo100(visible.map(valueOf))
+    return visible
+      .map((t, i) => ({
+        type_id: t.type_id,
+        name: categoryTypeName(t.type_id),
+        amount: valueOf(t),
+        pct: pcts[i]
+      }))
+      .sort((a, b) => b.amount - a.amount)
+  }
+
+  const receivedByTypeRows = buildTypeRows(
+    report?.by_category_type ?? [],
+    (t) => t.received
+  )
+  const spentByTypeRows = buildTypeRows(
+    report?.by_category_type ?? [],
+    (t) => Math.abs(t.spent)
+  )
 
   const toggleCatSort = (key: string): void => {
     setCatSort((prev) => {
@@ -250,7 +297,7 @@ export default function ReportsScreen(): JSX.Element {
     const dir = sort.dir === 'asc' ? 1 : -1
     return [...rows].sort((a, b) => {
       if (sort.key === 'name') {
-        return nameOf(a).localeCompare(nameOf(b), 'pt-BR') * dir
+        return nameOf(a).localeCompare(nameOf(b), APP_CONFIG.locale) * dir
       }
       const av = (a as Record<string, unknown>)[sort.key]
       const bv = (b as Record<string, unknown>)[sort.key]
@@ -293,6 +340,66 @@ export default function ReportsScreen(): JSX.Element {
     const txt = v === 0 ? '0,0% vs anterior' : `${arrow} ${Math.abs(v).toFixed(1).replace('.', ',')}% vs anterior`
     return <div className={`report-delta ${cls}`}>{txt}</div>
   }
+
+  const renderTypeTable = (
+    rows: TypeTableRow[],
+    amountLabel: string,
+    pctLabel: string,
+    totalAmount: number,
+    emptyTitle: string,
+    emptyHint: string
+  ): JSX.Element =>
+    rows.length === 0 ? (
+      <div className="empty-state">
+        <div className="empty-state-icon">🏷️</div>
+        <p>{emptyTitle}</p>
+        <span>{emptyHint}</span>
+      </div>
+    ) : (
+      <div className="table-wrap">
+        <table className="report-table">
+          <colgroup>
+            <col />
+            <col className="col-amount" />
+            <col className="col-pct" />
+            <col className="col-bar" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Tipo de categoria</th>
+              <th className="num">{amountLabel}</th>
+              <th className="num pct">{pctLabel}</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((t) => (
+              <tr key={t.type_id}>
+                <td>{t.name}</td>
+                <td className="num">{amountDisplay(t.amount)}</td>
+                <td className="num pct report-muted">{formatPercent(t.pct)}</td>
+                <td className="num">
+                  <div className="report-bar">
+                    <div
+                      className="report-bar-fill"
+                      style={{ width: `${t.pct}%` }}
+                    />
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td>Total</td>
+              <td className="num">{amountDisplay(totalAmount)}</td>
+              <td className="num pct">{formatPercent(100)}</td>
+              <td />
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    )
 
   return (
     <div className="screen">
@@ -460,6 +567,36 @@ export default function ReportsScreen(): JSX.Element {
             </div>
           </div>
 
+          <div className="report-type-grid">
+            <section className="card report-section">
+              <div className="card-head">
+                <h2>Recebido por tipo de categoria</h2>
+              </div>
+              {renderTypeTable(
+                receivedByTypeRows,
+                'Recebido',
+                '% do recebido',
+                totalReceived,
+                'Nenhum recebimento no período.',
+                'Não há entradas para as datas e filtros selecionados.'
+              )}
+            </section>
+
+            <section className="card report-section">
+              <div className="card-head">
+                <h2>Gastos por tipo de categoria</h2>
+              </div>
+              {renderTypeTable(
+                spentByTypeRows,
+                'Gasto',
+                '% do gasto',
+                totalSpentAbs,
+                'Nenhum gasto no período.',
+                'Não há despesas para as datas e filtros selecionados.'
+              )}
+            </section>
+          </div>
+
           <div className="report-sections">
             <section className="card report-section">
               <div className="card-head">
@@ -550,13 +687,13 @@ export default function ReportsScreen(): JSX.Element {
                           {amountDisplay(c.received)}
                         </td>
                         <td className="num pct report-muted">
-                          {formatPct(c.pctRecebido)}
+                          {formatPercent(c.pctRecebido)}
                         </td>
                         <td className="num report-neg">
                           {amountDisplay(c.spent)}
                         </td>
                         <td className="num pct report-muted">
-                          {formatPct(c.pctGasto)}
+                          {formatPercent(c.pctGasto)}
                         </td>
                         <td
                           className={`num ${c.net >= 0 ? 'report-pos' : 'report-neg'}`}

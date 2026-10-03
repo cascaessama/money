@@ -1,10 +1,12 @@
+import { APP_CONFIG } from './config'
+
 /** Valida se o texto é uma data real no formato dd/mm/aaaa. */
 export function isValidDateBR(value: string): boolean {
   const m = /^(\d{2})\/(\d{2})\/(\d{2})$/.exec(value.trim())
   if (!m) return false
   const day = +m[1]
   const month = +m[2]
-  const year = 2000 + +m[3]
+  const year = APP_CONFIG.centuryBase + +m[3]
   const d = new Date(year, month - 1, day)
   return (
     d.getFullYear() === year &&

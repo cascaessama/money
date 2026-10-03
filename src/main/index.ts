@@ -14,6 +14,10 @@ import {
   createCategory,
   updateCategory,
   deleteCategory,
+  listCategoryTypes,
+  createCategoryType,
+  updateCategoryType,
+  deleteCategoryType,
   listTransactionStatuses,
   createTransactionStatus,
   updateTransactionStatus,
@@ -78,6 +82,12 @@ function registerIpcHandlers(): void {
     create: createCategory,
     update: updateCategory,
     remove: deleteCategory
+  })
+  registerCrudHandlers('categories-types', {
+    list: listCategoryTypes,
+    create: createCategoryType,
+    update: updateCategoryType,
+    remove: deleteCategoryType
   })
   registerCrudHandlers('transaction-statuses', {
     list: listTransactionStatuses,

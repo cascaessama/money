@@ -3,6 +3,7 @@ import { join } from 'path'
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import initSqlJs from 'sql.js'
 import type { Database, SqlJsStatic, Statement, SqlValue } from 'sql.js'
+import { APP_CONFIG } from '../../shared/config'
 
 let SQL: SqlJsStatic
 let db: Database
@@ -11,7 +12,7 @@ let dbPath: string
 /** Inicializa o SQL (WASM) e abre o banco do disco (ou cria um novo). */
 export async function initConnection(): Promise<void> {
   SQL = await initSqlJs()
-  dbPath = join(app.getPath('userData'), 'money.db')
+  dbPath = join(app.getPath('userData'), APP_CONFIG.databaseFileName)
 
   if (existsSync(dbPath)) {
     db = new SQL.Database(readFileSync(dbPath))

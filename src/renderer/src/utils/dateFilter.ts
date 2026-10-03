@@ -1,8 +1,9 @@
 import type { Transaction } from '../../../shared/types'
+import { APP_CONFIG } from '../../../shared/config'
 
 const dateValue = (d: string): number => {
   const [day, month, year] = d.split('/').map(Number)
-  const fullYear = year < 100 ? 2000 + year : year
+  const fullYear = year < 100 ? APP_CONFIG.centuryBase + year : year
   return fullYear * 10000 + month * 100 + day
 }
 
@@ -16,7 +17,7 @@ function matchesDateFilter(term: string, dateStr: string): boolean {
   const t = term.trim()
   if (!t) return true
   const [dd, mm, yy] = dateStr.split('/').map((s) => parseInt(s, 10))
-  const fullYear = 2000 + yy
+  const fullYear = APP_CONFIG.centuryBase + yy
 
   // mm/yy ou mm/yyyy (mês/ano)
   const mmYY = /^(\d{1,2})\/(\d{2,4})$/.exec(t)

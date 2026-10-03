@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useToast } from '../hooks/useToast'
 import { Toast } from '../components/Toast'
+import { APP_CONFIG } from '../../../shared/config'
 
 const api = window.api
 
@@ -52,7 +53,7 @@ export default function BackupScreen(): JSX.Element {
       <div className="card" style={{ padding: '18px' }}>
         <p style={{ marginBottom: '16px', color: 'var(--text-muted)' }}>
           Seu banco fica em{' '}
-          <code>~/Library/Application Support/money/money.db</code>. Exporte um
+          <code>{`~/Library/Application Support/money/${APP_CONFIG.databaseFileName}`}</code>. Exporte um
           backup para um local seguro (ex.: HD externo, iCloud, Dropbox) e use-o
           para restaurar caso formate o computador.
         </p>

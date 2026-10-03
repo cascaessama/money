@@ -43,6 +43,25 @@ function appIsComplete() {
   }
 }
 
+/**
+ * Garante o `node_modules/electron/path.txt`, que o pacote `electron` usa para
+ * localizar o binário. Sem ele o electron-vite falha com "Electron uninstall".
+ */
+function ensurePathFile() {
+  const pathFile = path.join(electronDir, 'path.txt');
+  const expected = 'Electron.app/Contents/MacOS/Electron';
+  let current = '';
+  try {
+    current = fs.readFileSync(pathFile, 'utf-8').trim();
+  } catch {
+    current = '';
+  }
+  if (current !== expected) {
+    fs.writeFileSync(pathFile, expected);
+    console.log('[fix-electron-macos] path.txt recriado.');
+  }
+}
+
 function signAdHoc(target) {
   execSync(`codesign --force --deep --sign - "${target}"`, { stdio: 'inherit' });
 }
@@ -55,6 +74,7 @@ function signAdHoc(target) {
   if (appIsComplete()) {
     console.log('[fix-electron-macos] Electron completo. Re-assinando ad-hoc...');
     signAdHoc(appPath);
+    ensurePathFile();
     console.log('[fix-electron-macos] OK. Electron pronto.');
     process.exit(0);
   }
@@ -88,6 +108,7 @@ function signAdHoc(target) {
   execSync(`cp -R "${freshApp}" "${distDir}"`);
 
   fs.rmSync(tmpDir, { recursive: true, force: true });
+  ensurePathFile();
   console.log('[fix-electron-macos] Electron reinstalado e assinado. OK.');
   process.exit(0);
 })().catch((err) => {

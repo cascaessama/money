@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import WalletTypesScreen from './screens/WalletTypesScreen'
 import WalletsScreen from './screens/WalletsScreen'
 import CategoriesScreen from './screens/CategoriesScreen'
+import CategoryTypesScreen from './screens/CategoryTypesScreen'
 import TransactionStatusesScreen from './screens/TransactionStatusesScreen'
 import TransactionsScreen from './screens/TransactionsScreen'
 import CreditTransactionsScreen from './screens/CreditTransactionsScreen'
@@ -14,6 +15,7 @@ type Tab =
   | 'wallets'
   | 'types'
   | 'categories'
+  | 'categoryTypes'
   | 'statuses'
   | 'transactions'
   | 'credit'
@@ -24,14 +26,15 @@ type Tab =
 function App(): JSX.Element {
   const [tab, setTab] = useState<Tab>('reports')
 
-  // Atalhos de teclado: Cmd/Ctrl + 1..8 abrem cada tela.
+  // Atalhos de teclado: Cmd/Ctrl + 0..9 abrem cada tela.
   useEffect(() => {
     const shortcuts: Record<string, Tab> = {
-      '1': 'reports',
-      '2': 'transactions',
-      '3': 'credit',
-      '4': 'recurring',
-      '5': 'categories',
+      '0': 'reports',
+      '1': 'transactions',
+      '2': 'credit',
+      '3': 'recurring',
+      '4': 'categories',
+      '5': 'categoryTypes',
       '6': 'wallets',
       '7': 'types',
       '8': 'statuses',
@@ -100,6 +103,13 @@ function App(): JSX.Element {
               <span>Categorias</span>
             </button>
             <button
+              className={`nav-item ${tab === 'categoryTypes' ? 'active' : ''}`}
+              onClick={() => setTab('categoryTypes')}
+            >
+              <span className="nav-icon">🏷️</span>
+              <span>Tipos de Categoria</span>
+            </button>
+            <button
               className={`nav-item ${tab === 'wallets' ? 'active' : ''}`}
               onClick={() => setTab('wallets')}
             >
@@ -138,6 +148,8 @@ function App(): JSX.Element {
             <WalletTypesScreen />
           ) : tab === 'categories' ? (
             <CategoriesScreen />
+          ) : tab === 'categoryTypes' ? (
+            <CategoryTypesScreen />
           ) : tab === 'statuses' ? (
             <TransactionStatusesScreen />
           ) : tab === 'transactions' ? (

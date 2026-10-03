@@ -1,9 +1,11 @@
 import { queryAll, run } from './connection'
+import { AppError } from '../../shared/errors'
 import type { Category, CategoryInput } from '../../shared/types'
 
 interface CategoryRow {
   id: number
   name: string
+  type_id: number
   is_active: number
 }
 
@@ -11,6 +13,7 @@ function toCategory(row: CategoryRow): Category {
   return {
     id: row.id,
     name: row.name,
+    type_id: row.type_id,
     is_active: !!row.is_active
   }
 }
@@ -23,10 +26,10 @@ export function listCategories(): Category[] {
 }
 
 export function createCategory(input: CategoryInput): Category {
-  const id = run('INSERT INTO categories (name, is_active) VALUES (?, ?)', [
-    input.name.trim(),
-    input.is_active ? 1 : 0
-  ])
+  const id = run(
+    'INSERT INTO categories (name, type_id, is_active) VALUES (?, ?, ?)',
+    [input.name.trim(), input.type_id, input.is_active ? 1 : 0]
+  )
   const row = queryAll<CategoryRow>('SELECT * FROM categories WHERE id = ?', [id])[0]
   return toCategory(row)
 }
@@ -36,8 +39,8 @@ export function updateCategory(
   input: CategoryInput
 ): Category | undefined {
   run(
-    'UPDATE categories SET name = ?, is_active = ? WHERE id = ?',
-    [input.name.trim(), input.is_active ? 1 : 0, id]
+    'UPDATE categories SET name = ?, type_id = ?, is_active = ? WHERE id = ?',
+    [input.name.trim(), input.type_id, input.is_active ? 1 : 0, id]
   )
   const row = queryAll<CategoryRow>('SELECT * FROM categories WHERE id = ?', [id])[0]
   return row ? toCategory(row) : undefined
@@ -49,6 +52,15 @@ export function deleteCategory(id: number): boolean {
       id
     ])[0].n > 0
   if (!exists) return false
+
+  // Impede excluir uma categoria que esteja em uso por alguma transação.
+  const inUse =
+    queryAll<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM transactions WHERE category_id = ?',
+      [id]
+    )[0].n > 0
+  if (inUse) throw new Error(AppError.CATEGORY_IN_USE)
+
   run('DELETE FROM categories WHERE id = ?', [id])
   return true
 }

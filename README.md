@@ -26,9 +26,9 @@ O **Money** organiza suas finanças em carteiras e transações, com categorias,
 
 ## 🧭 Fluxos de cada tela
 
-> O menu lateral (e os atalhos `Cmd+1..9` / `Ctrl+1..9`) leva você a cada tela. Em macOS use `Cmd`; em Windows/Linux, `Ctrl`.
+> O menu lateral (e os atalhos `Cmd+0..9` / `Ctrl+0..9`) leva você a cada tela. Em macOS use `Cmd`; em Windows/Linux, `Ctrl`.
 
-### 📊 Relatório — `Cmd + 1`
+### 📊 Relatório — `Cmd + 0`
 Resumo do que entrou e saiu em um período.
 
 - Abre já com o **mês atual** (dia 1 até o **último dia do mês**).
@@ -38,7 +38,7 @@ Resumo do que entrou e saiu em um período.
 - **Por status:** total e quantidade por status.
 - > 💡 Transferências entre contas (categoria **"Entre contas"**) **não** contam como receita nem despesa.
 
-### 💸 Transações — `Cmd + 2`
+### 💸 Transações — `Cmd + 1`
 Cadastro e edição de lançamentos, com edição **estilo planilha**.
 
 - **Campos:** Data, Valor, Carteira, Categoria, Observações e Status.
@@ -48,10 +48,10 @@ Cadastro e edição de lançamentos, com edição **estilo planilha**.
 - **Paginação** e atalho para **+ Nova transação**.
 - O **saldo das carteiras** é atualizado automaticamente.
 
-### 💳 Crédito — `Cmd + 3`
+### 💳 Crédito — `Cmd + 2`
 Visão **somente leitura** das transações ligadas a carteiras de **crédito** (tipos que contêm "crédito"). Mesmos filtros, segmentação e paginação das Transações.
 
-### 🔁 Recorrência — `Cmd + 4`
+### 🔁 Recorrência — `Cmd + 3`
 Crie uma transação **repetida mensalmente** de uma vez só (ex.: parcelas de cartão de crédito).
 
 - Mesmos campos de uma transação **+ campo Quantidade** (mínimo 2).
@@ -61,8 +61,13 @@ Crie uma transação **repetida mensalmente** de uma vez só (ex.: parcelas de c
 - Se o dia não existir no mês seguinte (ex.: `31/01`), **ajusta para o último dia** do mês.
 - Após salvar, o foco volta para o campo **Data** para agilizar o próximo lançamento.
 
-### 🏷️ Categorias — `Cmd + 5`
-CRUD das categorias usadas nas transações (nome + ativo/inativo).
+### 🏷️ Categorias — `Cmd + 4`
+CRUD das categorias usadas nas transações (nome, **tipo de categoria** e ativo/inativo).
+
+> Cada categoria pertence a um **tipo de categoria** (obrigatório). Categorias em uso por transações **não podem ser excluídas**.
+
+### 🏷️ Tipos de Categoria — `Cmd + 5`
+CRUD dos tipos de categoria (ex.: Necessário, Desejos, Investimentos). Tipos em uso por alguma categoria **não podem ser excluídos**.
 
 ### 💳 Carteiras — `Cmd + 6`
 CRUD das carteiras (contas/cartões), com **saldo** atualizado automaticamente pelas transações e tipo de carteira.
@@ -85,11 +90,12 @@ Proteja seus dados.
 
 | Atalho | Tela |
 |--------|------|
-| `Cmd/Ctrl + 1` | Relatório |
-| `Cmd/Ctrl + 2` | Transações |
-| `Cmd/Ctrl + 3` | Crédito |
-| `Cmd/Ctrl + 4` | Recorrência |
-| `Cmd/Ctrl + 5` | Categorias |
+| `Cmd/Ctrl + 0` | Relatório |
+| `Cmd/Ctrl + 1` | Transações |
+| `Cmd/Ctrl + 2` | Crédito |
+| `Cmd/Ctrl + 3` | Recorrência |
+| `Cmd/Ctrl + 4` | Categorias |
+| `Cmd/Ctrl + 5` | Tipos de Categoria |
 | `Cmd/Ctrl + 6` | Carteiras |
 | `Cmd/Ctrl + 7` | Tipos de Carteira |
 | `Cmd/Ctrl + 8` | Status de Transação |
@@ -111,6 +117,41 @@ O banco de dados é um **único arquivo SQLite** fora do código do app:
 - Cada usuário tem o **próprio** banco.
 - O arquivo sobrevive a **atualizações** do app.
 - Use a tela de **Backup** para exportar/importar antes de formatar ou trocar de máquina.
+- O nome do arquivo (`money.db`) é configurável em `src/shared/config.ts` (`databaseFileName`).
+
+---
+
+## ⚙️ Configurações fixas
+
+Todas as regras de negócio que eram "hardcode" ficam em um único arquivo:
+
+**`src/shared/config.ts`** → objeto `APP_CONFIG`.
+
+Edite os valores e rode o app novamente (em modo `dev`, o hot reload já aplica).
+
+| Configuração | Padrão | O que faz |
+|--------------|--------|-----------|
+| `transferCategoryNames` | `entre contas`, `transferência`, `transferencia` | Categorias tratadas como transferência entre contas: ficam **fora** do relatório (não contam como receita nem despesa). |
+| `previstoStatusNames` | `agendado`, `pagar`, `receber` | Status somados como **Previsto** (saldo projetado) no relatório. |
+| `devoStatusName` | `devo` | Status **"Devo"**: pré-selecionado na Recorrência e somado no relatório. |
+| `paidStatusName` | `pago` | Status usado pelo botão **"marcar como pago"** na tela de Crédito. |
+| `creditWalletTypeMatch` | `crédito` | Trecho que identifica uma carteira de **crédito** no nome do tipo (ex.: "Cartão de crédito"). |
+| `defaultCategoryTypeName` | `Necessário` | Tipo de categoria padrão criado/usado ao migrar bancos antigos. |
+| `databaseFileName` | `money.db` | Nome do arquivo do banco dentro da pasta de dados do app. |
+| `centuryBase` | `2000` | Século somado aos anos de 2 dígitos (aa → 20aa). |
+| `locale` / `currency` | `pt-BR` / `BRL` | Localidade e moeda da formatação e da ordenação. |
+| `pageSize` | `20` | Itens por página nas listas (Transações e Crédito). |
+| `defaultStatusColor` | `#2d6cdf` | Cor padrão de um novo status de transação. |
+| `defaultStatusColorFallback` | `#000000` | Cor exibida quando um status não tem cor definida. |
+| `recurringDefaultQuantity` / `recurringMinQuantity` | `2` / `2` | Quantidade pré-preenchida e quantidade mínima na tela de Recorrência. |
+
+### Regras estruturais (não configuráveis)
+
+Estas estão gravadas no banco/código e **não** mudam pelo arquivo de configuração:
+
+- **Formato de data:** sempre `dd/mm/aa` (o banco guarda texto e ordena recortando a string).
+- **Sinal do valor:** positivo = entrada (recebido); negativo = saída (gasto).
+- **Status realizado:** transação **sem** status entra no saldo da carteira; **com** status não entra (é tratada como prevista).
 
 ---
 
@@ -155,7 +196,7 @@ src/
 │   └── db/      # Migrações e CRUDs (categorias, carteiras, transações, etc.)
 ├── preload/     # Ponte segura entre o processo principal e a interface
 ├── renderer/    # Interface React (telas, componentes, hooks, estilos)
-└── shared/      # Tipos, validações e erros compartilhados
+└── shared/      # Tipos, validações, erros e configurações (config.ts)
 ```
 
 ---

@@ -7,6 +7,8 @@ import type {
   WalletInput,
   Category,
   CategoryInput,
+  CategoryType,
+  CategoryTypeInput,
   TransactionStatus,
   TransactionStatusInput,
   Transaction,
@@ -43,6 +45,18 @@ const api = {
       ipcRenderer.invoke('categories:update', id, input),
     remove: (id: number): Promise<boolean> =>
       ipcRenderer.invoke('categories:delete', id)
+  },
+  categoriesTypes: {
+    list: (): Promise<CategoryType[]> => ipcRenderer.invoke('categories-types:list'),
+    create: (input: CategoryTypeInput): Promise<CategoryType> =>
+      ipcRenderer.invoke('categories-types:create', input),
+    update: (
+      id: number,
+      input: CategoryTypeInput
+    ): Promise<CategoryType | undefined> =>
+      ipcRenderer.invoke('categories-types:update', id, input),
+    remove: (id: number): Promise<boolean> =>
+      ipcRenderer.invoke('categories-types:delete', id)
   },
   transactionStatuses: {
     list: (): Promise<TransactionStatus[]> =>

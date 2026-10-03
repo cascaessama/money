@@ -29,14 +29,27 @@ export interface WalletInput {
   is_active: boolean
 }
 
-export interface Category {
+export interface CategoryType {
   id: number
   name: string
   is_active: boolean
 }
 
+export interface CategoryTypeInput {
+  name: string
+  is_active: boolean
+}
+
+export interface Category {
+  id: number
+  name: string
+  type_id: number
+  is_active: boolean
+}
+
 export interface CategoryInput {
   name: string
+  type_id: number
   is_active: boolean
 }
 
@@ -96,6 +109,14 @@ export interface PeriodReportCategory {
   count: number
 }
 
+/** Totais por tipo de categoria. Segue a convenção de sinal do relatório:
+ *  `received` positivo, `spent` negativo. */
+export interface PeriodReportCategoryType {
+  type_id: number
+  received: number
+  spent: number
+}
+
 export interface PeriodReportStatus {
   status_id: number | null
   amount: number
@@ -108,6 +129,7 @@ export interface PeriodReport {
   net: number
   transaction_count: number
   by_category: PeriodReportCategory[]
+  by_category_type: PeriodReportCategoryType[]
   by_status: PeriodReportStatus[]
   transactions: Transaction[]
 }
@@ -129,6 +151,15 @@ export interface Api {
     list: () => Promise<Category[]>
     create: (input: CategoryInput) => Promise<Category>
     update: (id: number, input: CategoryInput) => Promise<Category | undefined>
+    remove: (id: number) => Promise<boolean>
+  }
+  categoriesTypes: {
+    list: () => Promise<CategoryType[]>
+    create: (input: CategoryTypeInput) => Promise<CategoryType>
+    update: (
+      id: number,
+      input: CategoryTypeInput
+    ) => Promise<CategoryType | undefined>
     remove: (id: number) => Promise<boolean>
   }
   transactionStatuses: {

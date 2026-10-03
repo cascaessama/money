@@ -1,4 +1,6 @@
 import { getDb, initConnection, persist } from './connection'
+import { APP_CONFIG } from '../../shared/config'
+import { AppError } from '../../shared/errors'
 
 /** Colunas atuais da tabela wallets. */
 function walletColumns(): string[] {
@@ -47,6 +49,56 @@ function ensureWalletsTable(): void {
     db.run('DROP TABLE wallets')
     db.run('ALTER TABLE wallets_new RENAME TO wallets')
   }
+}
+
+/** Garante um tipo de categoria padrão para migrar categorias antigas. */
+function ensureDefaultCategoryType(): number {
+  const db = getDb()
+  const name = APP_CONFIG.defaultCategoryTypeName
+  const escaped = name.replace(/'/g, "''")
+  const found = db.exec(
+    `SELECT id FROM categories_types WHERE name = '${escaped}' COLLATE NOCASE`
+  )
+  if (found.length && found[0].values.length) {
+    return Number(found[0].values[0][0])
+  }
+  const any = db.exec('SELECT id FROM categories_types ORDER BY id LIMIT 1')
+  if (any.length && any[0].values.length) {
+    return Number(any[0].values[0][0])
+  }
+  db.run('INSERT INTO categories_types (name, is_active) VALUES (?, 1)', [name])
+  return Number(db.exec('SELECT last_insert_rowid() AS id')[0].values[0][0])
+}
+
+/** Garante o schema de categories (tipo de categoria obrigatório). */
+function ensureCategoriesTable(): void {
+  const db = getDb()
+  const res = db.exec('PRAGMA table_info(categories)')
+  const cols = res.length ? res[0].values : []
+  const colNames = cols.map((c) => String(c[1]))
+  const idx = colNames.indexOf('type_id')
+  const hasTypeId = idx !== -1 && Number(cols[idx][3]) === 1
+  if (hasTypeId) return
+
+  // Vincula as categorias já existentes a um tipo padrão.
+  const defaultTypeId = ensureDefaultCategoryType()
+
+  db.run('PRAGMA foreign_keys = OFF')
+  db.run(`
+    CREATE TABLE categories_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      type_id INTEGER NOT NULL REFERENCES categories_types(id) ON DELETE RESTRICT,
+      is_active BOOLEAN DEFAULT 1
+    )
+  `)
+  db.run(
+    `INSERT INTO categories_new (id, name, type_id, is_active)
+     SELECT id, name, ?, is_active FROM categories`,
+    [defaultTypeId]
+  )
+  db.run('DROP TABLE categories')
+  db.run('ALTER TABLE categories_new RENAME TO categories')
 }
 
 /** Garante o schema de transactions (categoria obrigatória). */
@@ -99,6 +151,50 @@ function ensureTransactionsTable(): void {
   db.run('ALTER TABLE transactions_new RENAME TO transactions')
 }
 
+/**
+ * Cria triggers que impedem excluir registros referenciados por transações,
+ * mesmo em bancos antigos cujas tabelas não declaram a FK com RESTRICT.
+ */
+function ensureDeleteGuards(): void {
+  const db = getDb()
+  db.run('DROP TRIGGER IF EXISTS trg_categories_delete_used')
+  db.run('DROP TRIGGER IF EXISTS trg_categories_types_delete_used')
+  db.run('DROP TRIGGER IF EXISTS trg_wallets_delete_used')
+  db.run('DROP TRIGGER IF EXISTS trg_transaction_statuses_delete_used')
+  db.run(`
+    CREATE TRIGGER trg_categories_delete_used
+    BEFORE DELETE ON categories
+    WHEN EXISTS (SELECT 1 FROM transactions WHERE category_id = OLD.id)
+    BEGIN
+      SELECT RAISE(ABORT, '${AppError.CATEGORY_IN_USE}');
+    END
+  `)
+  db.run(`
+    CREATE TRIGGER trg_categories_types_delete_used
+    BEFORE DELETE ON categories_types
+    WHEN EXISTS (SELECT 1 FROM categories WHERE type_id = OLD.id)
+    BEGIN
+      SELECT RAISE(ABORT, '${AppError.CATEGORY_TYPE_IN_USE}');
+    END
+  `)
+  db.run(`
+    CREATE TRIGGER trg_wallets_delete_used
+    BEFORE DELETE ON wallets
+    WHEN EXISTS (SELECT 1 FROM transactions WHERE wallet_id = OLD.id)
+    BEGIN
+      SELECT RAISE(ABORT, '${AppError.WALLET_IN_USE}');
+    END
+  `)
+  db.run(`
+    CREATE TRIGGER trg_transaction_statuses_delete_used
+    BEFORE DELETE ON transaction_statuses
+    WHEN EXISTS (SELECT 1 FROM transactions WHERE status_id = OLD.id)
+    BEGIN
+      SELECT RAISE(ABORT, '${AppError.STATUS_IN_USE}');
+    END
+  `)
+}
+
 /** Cria triggers que mantêm o saldo da carteira sincronizado com as transações. */
 function ensureTransactionTriggers(): void {
   const db = getDb()
@@ -148,9 +244,17 @@ export async function initDatabase(): Promise<void> {
     )
   `)
   db.run(`
+    CREATE TABLE IF NOT EXISTS categories_types (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      is_active BOOLEAN DEFAULT 1
+    )
+  `)
+  db.run(`
     CREATE TABLE IF NOT EXISTS categories (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL UNIQUE,
+      type_id INTEGER NOT NULL REFERENCES categories_types(id) ON DELETE RESTRICT,
       is_active BOOLEAN DEFAULT 1
     )
   `)
@@ -166,11 +270,17 @@ export async function initDatabase(): Promise<void> {
   // Garante o schema de wallets (associação por type_id, referenciando o id).
   ensureWalletsTable()
 
+  // Garante o schema de categories (tipo de categoria obrigatório).
+  ensureCategoriesTable()
+
   // Garante o schema de transactions (categoria obrigatória).
   ensureTransactionsTable()
 
   // Cria os triggers que mantêm o saldo da carteira sincronizado.
   ensureTransactionTriggers()
+
+  // Cria os triggers que impedem excluir registros em uso por transações.
+  ensureDeleteGuards()
 
   // Recalcula o saldo das carteiras a partir das transações sem status.
   db.run('UPDATE wallets SET balance = 0')

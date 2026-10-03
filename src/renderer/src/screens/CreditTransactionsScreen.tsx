@@ -4,6 +4,7 @@ import { Toast } from '../components/Toast'
 import { Loader } from '../components/Loader'
 import { amountDisplay, formatDateInput } from '../utils/format'
 import { isValidDateBR, completeDateInput } from '../../../shared/validation'
+import { APP_CONFIG } from '../../../shared/config'
 import { dateMatcher } from '../utils/dateFilter'
 import { useColumnFilters } from '../hooks/useColumnFilters'
 import ColumnFilter from '../components/ColumnFilter'
@@ -18,7 +19,7 @@ import type {
 
 const api = window.api
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = APP_CONFIG.pageSize
 
 export default function CreditTransactionsScreen(): JSX.Element {
   const [rows, setRows] = useState<Transaction[]>([])
@@ -61,12 +62,14 @@ export default function CreditTransactionsScreen(): JSX.Element {
     load()
   }, [load])
 
-  // Carteiras cujo tipo contém "crédito".
+  // Carteiras cujo tipo contém o trecho configurado (padrão: "crédito").
   const typeById = new Map(types.map((t) => [t.id, t]))
   const creditWalletIds = new Set(
     wallets
       .filter((w) =>
-        (typeById.get(w.type_id)?.name ?? '').toLowerCase().includes('crédito')
+        (typeById.get(w.type_id)?.name ?? '')
+          .toLowerCase()
+          .includes(APP_CONFIG.creditWalletTypeMatch)
       )
       .map((w) => w.id)
   )
@@ -107,7 +110,7 @@ export default function CreditTransactionsScreen(): JSX.Element {
       return
     }
     const pago = statuses.find(
-      (s) => s.name.toLowerCase() === 'pago' && s.is_active
+      (s) => s.name.toLowerCase() === APP_CONFIG.paidStatusName && s.is_active
     )
     if (!pago) {
       showToast('error', 'Crie um status ativo chamado “Pago”.')

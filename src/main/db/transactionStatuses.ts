@@ -1,4 +1,5 @@
 import { queryAll, run } from './connection'
+import { AppError } from '../../shared/errors'
 import type { TransactionStatus, TransactionStatusInput } from '../../shared/types'
 
 interface TransactionStatusRow {
@@ -60,6 +61,15 @@ export function deleteTransactionStatus(id: number): boolean {
       [id]
     )[0].n > 0
   if (!exists) return false
+
+  // Impede excluir um status que esteja em uso por alguma transação.
+  const inUse =
+    queryAll<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM transactions WHERE status_id = ?',
+      [id]
+    )[0].n > 0
+  if (inUse) throw new Error(AppError.STATUS_IN_USE)
+
   run('DELETE FROM transaction_statuses WHERE id = ?', [id])
   return true
 }

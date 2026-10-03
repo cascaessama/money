@@ -15,6 +15,12 @@ export {
   deleteCategory
 } from './categories'
 export {
+  listCategoryTypes,
+  createCategoryType,
+  updateCategoryType,
+  deleteCategoryType
+} from './categoriesTypes'
+export {
   listTransactionStatuses,
   createTransactionStatus,
   updateTransactionStatus,

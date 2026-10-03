@@ -1,4 +1,5 @@
 import { queryAll, run } from './connection'
+import { AppError } from '../../shared/errors'
 import type { Wallet, WalletInput } from '../../shared/types'
 
 interface WalletRow {
@@ -66,6 +67,15 @@ export function deleteWallet(id: number): boolean {
       id
     ])[0].n > 0
   if (!exists) return false
+
+  // Impede excluir uma carteira que esteja em uso por alguma transação.
+  const inUse =
+    queryAll<{ n: number }>(
+      'SELECT COUNT(*) AS n FROM transactions WHERE wallet_id = ?',
+      [id]
+    )[0].n > 0
+  if (inUse) throw new Error(AppError.WALLET_IN_USE)
+
   run('DELETE FROM wallets WHERE id = ?', [id])
   return true
 }

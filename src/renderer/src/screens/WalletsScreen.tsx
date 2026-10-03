@@ -10,6 +10,7 @@ import { useNewShortcut } from '../hooks/useNewShortcut'
 import { useRowHighlight } from '../hooks/useRowHighlight'
 import ColumnFilter from '../components/ColumnFilter'
 import SearchableSelect, { toSelectOptions } from '../components/SearchableSelect'
+import { isAppError, AppError } from '../../../shared/errors'
 import type { Wallet, WalletType } from '../../../shared/types'
 
 const api = window.api
@@ -189,7 +190,11 @@ export default function WalletsScreen(): JSX.Element {
       await load()
     } catch (err) {
       console.error(err)
-      showToast('error', 'Erro ao excluir a carteira.')
+      if (isAppError(err, AppError.WALLET_IN_USE)) {
+        showToast('error', 'Não é possível excluir: esta carteira está em uso em transações.')
+      } else {
+        showToast('error', 'Erro ao excluir a carteira.')
+      }
     }
   }
 

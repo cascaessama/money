@@ -6,7 +6,7 @@ import { formatDateInput, parseMoney, formatAmountBlur } from '../utils/format'
 import { isValidDateBR, completeDateInput } from '../../../shared/validation'
 import SearchableSelect, { toSelectOptions } from '../components/SearchableSelect'
 import type { TransactionInput, Wallet, Category, TransactionStatus } from '../../../shared/types'
-import { DEVO_STATUS_NAME } from '../config'
+import { APP_CONFIG } from '../../../shared/config'
 
 const api = window.api
 
@@ -17,7 +17,7 @@ function pad2(n: number): string {
 /** Converte "dd/mm/aa" em componentes com ano completo. */
 function parseBR(s: string): { d: number; m: number; y: number } {
   const [d, m, y] = s.split('/').map(Number)
-  return { d, m, y: 2000 + y }
+  return { d, m, y: APP_CONFIG.centuryBase + y }
 }
 
 function fmtBR(d: number, m: number, y: number): string {
@@ -51,7 +51,7 @@ export default function RecurringTransactionsScreen(): JSX.Element {
   const [categoryId, setCategoryId] = useState<number | null>(null)
   const [statusId, setStatusId] = useState<number | null>(null)
   const [notes, setNotes] = useState('')
-  const [quantity, setQuantity] = useState('2')
+  const [quantity, setQuantity] = useState(String(APP_CONFIG.recurringDefaultQuantity))
   const dateRef = useRef<HTMLInputElement | null>(null)
 
   const { toast, showToast } = useToast()
@@ -69,7 +69,7 @@ export default function RecurringTransactionsScreen(): JSX.Element {
         setStatuses(statusList)
         // Status padrão: "Devo".
         const devo = statusList.find(
-          (s) => s.name.trim().toLowerCase() === DEVO_STATUS_NAME
+          (s) => s.name.trim().toLowerCase() === APP_CONFIG.devoStatusName
         )
         if (devo) setStatusId(devo.id)
       } catch (err) {
@@ -85,7 +85,7 @@ export default function RecurringTransactionsScreen(): JSX.Element {
   const previewDates = useMemo(() => {
     const completed = completeDateInput(date.trim())
     const qty = parseInt(quantity, 10)
-    if (!isValidDateBR(completed) || !(qty >= 2)) return []
+    if (!isValidDateBR(completed) || !(qty >= APP_CONFIG.recurringMinQuantity)) return []
     const start = parseBR(completed)
     const dates: string[] = []
     for (let i = 0; i < qty; i++) {
@@ -97,7 +97,7 @@ export default function RecurringTransactionsScreen(): JSX.Element {
 
   // Status padrão da tela.
   const devoStatusId =
-    statuses.find((s) => s.name.trim().toLowerCase() === DEVO_STATUS_NAME)?.id ??
+    statuses.find((s) => s.name.trim().toLowerCase() === APP_CONFIG.devoStatusName)?.id ??
     null
 
   function handleReset(): void {
@@ -107,7 +107,7 @@ export default function RecurringTransactionsScreen(): JSX.Element {
     setCategoryId(null)
     setStatusId(devoStatusId)
     setNotes('')
-    setQuantity('2')
+    setQuantity(String(APP_CONFIG.recurringDefaultQuantity))
   }
 
   const handleSubmit = useCallback(async () => {
@@ -131,8 +131,8 @@ export default function RecurringTransactionsScreen(): JSX.Element {
       showToast('error', 'Selecione uma categoria.')
       return
     }
-    if (!(qty >= 2)) {
-      showToast('error', 'Quantidade deve ser no mínimo 2.')
+    if (!(qty >= APP_CONFIG.recurringMinQuantity)) {
+      showToast('error', `Quantidade deve ser no mínimo ${APP_CONFIG.recurringMinQuantity}.`)
       return
     }
 

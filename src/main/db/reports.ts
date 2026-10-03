@@ -1,10 +1,12 @@
 import { queryAll } from './connection'
+import { APP_CONFIG } from '../../shared/config'
 import {
   REPORT_STATUS_NONE,
   type Transaction,
   type PeriodReport,
   type PeriodReportInput,
   type PeriodReportCategory,
+  type PeriodReportCategoryType,
   type PeriodReportStatus
 } from '../../shared/types'
 
@@ -59,11 +61,7 @@ export function periodReport(input: PeriodReportInput): PeriodReport {
 
   // Categorias tratadas como transferência entre contas: ficam fora do
   // relatório de receitas/despesas (não são crédito nem débito).
-  const TRANSFER_CATEGORY_NAMES = [
-    'entre contas',
-    'transferência',
-    'transferencia'
-  ]
+  const TRANSFER_CATEGORY_NAMES = APP_CONFIG.transferCategoryNames
   const transferRows = queryAll<{ id: number }>(
     `SELECT id FROM categories
      WHERE LOWER(TRIM(name)) IN (${TRANSFER_CATEGORY_NAMES.map(() => '?').join(',')})`,
@@ -76,6 +74,12 @@ export function periodReport(input: PeriodReportInput): PeriodReport {
     )
     params.push(...transferIds)
   }
+
+  // Mapa categoria → tipo de categoria, para agregar os totais por tipo.
+  const categoryTypeRows = queryAll<{ id: number; type_id: number }>(
+    'SELECT id, type_id FROM categories'
+  )
+  const typeIdByCategory = new Map(categoryTypeRows.map((c) => [c.id, c.type_id]))
 
   const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : ''
 
@@ -100,6 +104,7 @@ export function periodReport(input: PeriodReportInput): PeriodReport {
   let totalSpent = 0
   const catMap = new Map<number, { received: number; spent: number; count: number }>()
   const statusMap = new Map<number | null, { amount: number; count: number }>()
+  const typeMap = new Map<number, { received: number; spent: number }>()
 
   for (const r of rows) {
     if (r.amount >= 0) totalReceived += r.amount
@@ -110,6 +115,14 @@ export function periodReport(input: PeriodReportInput): PeriodReport {
     else c.spent += r.amount
     c.count++
     catMap.set(r.category_id, c)
+
+    const typeId = typeIdByCategory.get(r.category_id)
+    if (typeId != null) {
+      const t = typeMap.get(typeId) ?? { received: 0, spent: 0 }
+      if (r.amount >= 0) t.received += r.amount
+      else t.spent += r.amount
+      typeMap.set(typeId, t)
+    }
 
     const s = statusMap.get(r.status_id) ?? { amount: 0, count: 0 }
     s.amount += r.amount
@@ -127,6 +140,12 @@ export function periodReport(input: PeriodReportInput): PeriodReport {
     }))
     .sort((a, b) => Math.abs(b.net) - Math.abs(a.net))
 
+  // Totais por tipo de categoria (recebido e gasto). A ordenação é feita na
+  // tela, pois cada caixa (recebido/gasto) ordena pelo seu próprio valor.
+  const byCategoryType: PeriodReportCategoryType[] = [...typeMap.entries()].map(
+    ([type_id, t]) => ({ type_id, received: t.received, spent: t.spent })
+  )
+
   const byStatus: PeriodReportStatus[] = [...statusMap.entries()].map(
     ([status_id, s]) => ({
       status_id,
@@ -141,6 +160,7 @@ export function periodReport(input: PeriodReportInput): PeriodReport {
     net: totalReceived + totalSpent,
     transaction_count: rows.length,
     by_category: byCategory,
+    by_category_type: byCategoryType,
     by_status: byStatus,
     transactions
   }

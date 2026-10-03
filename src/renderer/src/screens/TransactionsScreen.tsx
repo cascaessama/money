@@ -13,6 +13,7 @@ import {
 } from '../utils/format'
 import { dateMatcher } from '../utils/dateFilter'
 import { isValidDateBR, completeDateInput } from '../../../shared/validation'
+import { APP_CONFIG } from '../../../shared/config'
 import { useColumnFilters } from '../hooks/useColumnFilters'
 import { useNewShortcut } from '../hooks/useNewShortcut'
 import { useRowHighlight } from '../hooks/useRowHighlight'
@@ -32,7 +33,7 @@ const FIELDS = ['date', 'amount', 'wallet', 'category', 'notes', 'status']
 const NEW_FIELDS = ['date', 'amount', 'wallet', 'category', 'notes', 'status']
 const TEXT_FIELDS = ['date', 'amount', 'notes']
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = APP_CONFIG.pageSize
 
 export default function TransactionsScreen(): JSX.Element {
   const [rows, setRows] = useState<Transaction[]>([])
