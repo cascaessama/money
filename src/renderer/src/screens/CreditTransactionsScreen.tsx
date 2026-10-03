@@ -3,6 +3,7 @@ import { useToast } from '../hooks/useToast'
 import { Toast } from '../components/Toast'
 import { Loader } from '../components/Loader'
 import { amountDisplay, formatDateInput } from '../utils/format'
+import { formatPercent, percentagesTo100 } from '../utils/percent'
 import { isValidDateBR, completeDateInput } from '../../../shared/validation'
 import { APP_CONFIG } from '../../../shared/config'
 import { dateMatcher } from '../utils/dateFilter'
@@ -13,6 +14,7 @@ import type {
   Transaction,
   Wallet,
   Category,
+  CategoryType,
   TransactionStatus,
   WalletType
 } from '../../../shared/types'
@@ -27,6 +29,7 @@ export default function CreditTransactionsScreen(): JSX.Element {
   const [categories, setCategories] = useState<Category[]>([])
   const [statuses, setStatuses] = useState<TransactionStatus[]>([])
   const [types, setTypes] = useState<WalletType[]>([])
+  const [categoryTypes, setCategoryTypes] = useState<CategoryType[]>([])
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
   const [selectedWalletId, setSelectedWalletId] = useState<number | null>(null)
@@ -37,19 +40,27 @@ export default function CreditTransactionsScreen(): JSX.Element {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [transactions, walletList, categoryList, statusList, typeList] =
-        await Promise.all([
-          api.transactions.list(),
-          api.wallets.list(),
-          api.categories.list(),
-          api.transactionStatuses.list(),
-          api.walletsTypes.list()
-        ])
+      const [
+        transactions,
+        walletList,
+        categoryList,
+        statusList,
+        typeList,
+        categoryTypeList
+      ] = await Promise.all([
+        api.transactions.list(),
+        api.wallets.list(),
+        api.categories.list(),
+        api.transactionStatuses.list(),
+        api.walletsTypes.list(),
+        api.categoriesTypes.list()
+      ])
       setRows(transactions)
       setWallets(walletList)
       setCategories(categoryList)
       setStatuses(statusList)
       setTypes(typeList)
+      setCategoryTypes(categoryTypeList)
     } catch (err) {
       console.error(err)
       showToast('error', 'Erro ao carregar os dados.')
@@ -134,6 +145,36 @@ export default function CreditTransactionsScreen(): JSX.Element {
     wallets.find((w) => w.id === id)?.name ?? ''
   const categoryName = (id: number | null): string =>
     categories.find((c) => c.id === id)?.name ?? ''
+  const categoryTypeName = (id: number): string =>
+    categoryTypes.find((t) => t.id === id)?.name ?? ''
+
+  // Gasto em aberto por tipo de categoria, sobre as linhas filtradas:
+  // só saídas, ignorando as categorias de transferência ("entre contas").
+  const categoryTypeIdById = new Map(categories.map((c) => [c.id, c.type_id]))
+  const transferCategoryIds = new Set(
+    categories
+      .filter((c) =>
+        APP_CONFIG.transferCategoryNames.includes(c.name.trim().toLowerCase())
+      )
+      .map((c) => c.id)
+  )
+  const gastoByType = new Map<number, number>()
+  for (const r of filtered) {
+    if (r.amount >= 0 || transferCategoryIds.has(r.category_id)) continue
+    const typeId = categoryTypeIdById.get(r.category_id)
+    if (typeId == null) continue
+    gastoByType.set(typeId, (gastoByType.get(typeId) ?? 0) + Math.abs(r.amount))
+  }
+  const gastoEntries = [...gastoByType.entries()]
+    .map(([type_id, amount]) => ({ type_id, amount }))
+    .sort((a, b) => b.amount - a.amount)
+  const gastoPcts = percentagesTo100(gastoEntries.map((e) => e.amount))
+  const gastoTypeRows = gastoEntries.map((e, i) => ({
+    ...e,
+    name: categoryTypeName(e.type_id),
+    pct: gastoPcts[i]
+  }))
+  const totalGasto = gastoEntries.reduce((s, e) => s + e.amount, 0)
   return (
     <div className="screen">
       <div className="page-head">
@@ -176,6 +217,67 @@ export default function CreditTransactionsScreen(): JSX.Element {
           ✓ Confirmar
         </button>
       </div>
+
+      {!loading && creditRows.length > 0 && (
+        <section className="card credit-summary">
+          <div className="card-head">
+            <h2>Gastos por tipo de categoria</h2>
+          </div>
+          {gastoTypeRows.length === 0 ? (
+            <div className="empty-state">
+              <div className="empty-state-icon">🏷️</div>
+              <p>Nenhum gasto em aberto.</p>
+              <span>Não há despesas para os filtros selecionados.</span>
+            </div>
+          ) : (
+            <div className="table-wrap">
+              <table className="report-table">
+                <colgroup>
+                  <col />
+                  <col className="col-amount" />
+                  <col className="col-pct" />
+                  <col className="col-bar" />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th>Tipo de categoria</th>
+                    <th className="num">Gasto</th>
+                    <th className="num pct">% do gasto</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {gastoTypeRows.map((t) => (
+                    <tr key={t.type_id}>
+                      <td>{t.name}</td>
+                      <td className="num">{amountDisplay(t.amount)}</td>
+                      <td className="num pct report-muted">
+                        {formatPercent(t.pct)}
+                      </td>
+                      <td className="num">
+                        <div className="report-bar">
+                          <div
+                            className="report-bar-fill"
+                            style={{ width: `${t.pct}%` }}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td>Total</td>
+                    <td className="num">{amountDisplay(totalGasto)}</td>
+                    <td className="num pct">{formatPercent(100)}</td>
+                    <td />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </section>
+      )}
 
       <section className="card">
         <div className="card-head">

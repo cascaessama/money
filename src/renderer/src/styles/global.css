@@ -993,6 +993,9 @@ tbody tr.is-editing {
     grid-template-columns: 1fr;
   }
 }
+.credit-summary {
+  margin-bottom: 20px;
+}
 .report-bar {
   height: 8px;
   background: var(--border);
